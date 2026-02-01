@@ -2,12 +2,26 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>DDLC Style Textbox (JSON)</title>
+<title>Pro DDLC Textbox (JSON + Character Data)</title>
 <style>
 body {
     margin: 0;
     background: #111;
     font-family: Arial, sans-serif;
+}
+
+#scene {
+    position: relative;
+    width: 100vw;
+    height: 100vh;
+}
+
+#portrait {
+    position: absolute;
+    bottom: 200px;
+    left: 40px;
+    width: 300px;
+    image-rendering: pixelated;
 }
 
 #textbox {
@@ -52,6 +66,10 @@ body {
 </head>
 <body>
 
+<div id="scene">
+    <img id="portrait" src="" />
+</div>
+
 <div id="textbox">
     <div id="namebox"></div>
     <div id="text"></div>
@@ -60,6 +78,7 @@ body {
 
 <script>
 let dialogue = [];
+let characterData = {};
 let index = 0;
 let charIndex = 0;
 let typing = false;
@@ -67,14 +86,17 @@ let typing = false;
 const textbox = document.getElementById('textbox');
 const namebox = document.getElementById('namebox');
 const textEl = document.getElementById('text');
+const portrait = document.getElementById('portrait');
 
-fetch('assets/dialogue.json')
-    .then(res => res.json())
-    .then(data => {
-        dialogue = data.dialogue;
-        showTextbox();
-    })
-    .catch(err => console.error('Failed to load dialogue.json', err));
+Promise.all([
+    fetch('assets/dialogue.json')
+        .then(r => r.json()),
+    fetch('assets/katz/characterdata.json').then(r => r.json())
+]).then(([dialogueJson, charJson]) => {
+    dialogue = dialogueJson.dialogue;
+    characterData = charJson;
+    showTextbox();
+}).catch(err => console.error(err));
 
 function showTextbox() {
     textbox.style.display = 'block';
@@ -85,13 +107,22 @@ function startLine() {
     typing = true;
     charIndex = 0;
     textEl.textContent = '';
-    namebox.textContent = dialogue[index].name;
+
+    const line = dialogue[index];
+    namebox.textContent = line.name;
+
+    if (line.expression && characterData.list[line.expression]) {
+        portrait.src = characterData.prefix + characterData.list[line.expression] + '.png';
+        portrait.style.display = 'block';
+    }
+
     type();
 }
 
 function type() {
-    if (charIndex < dialogue[index].text.length) {
-        textEl.textContent += dialogue[index].text.charAt(charIndex);
+    const line = dialogue[index];
+    if (charIndex < line.text.length) {
+        textEl.textContent += line.text.charAt(charIndex);
         charIndex++;
         setTimeout(type, 30);
     } else {
@@ -110,8 +141,15 @@ function nextLine() {
         startLine();
     } else {
         textbox.style.display = 'none';
+        portrait.style.display = 'none';
     }
 }
+
+document.addEventListener('click', nextLine);
+</script>
+</body>
+</html>
+
 
 document.addEventListener('click', nextLine);
 </script>
