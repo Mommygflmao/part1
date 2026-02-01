@@ -68,7 +68,7 @@ const textbox = document.getElementById('textbox');
 const namebox = document.getElementById('namebox');
 const textEl = document.getElementById('text');
 
-fetch('dialogue.json')
+fetch('assets/dialogue.json')
     .then(res => res.json())
     .then(data => {
         dialogue = data.dialogue;
