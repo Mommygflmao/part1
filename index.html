@@ -2,154 +2,75 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Pro DDLC Textbox (JSON + Character Data)</title>
+<title>Pro DDLC Textbox (JSON + Character Packs)</title>
 <style>
-body {
-    margin: 0;
-    background: #111;
-    font-family: Arial, sans-serif;
-}
-
-#scene {
-    position: relative;
-    width: 100vw;
-    height: 100vh;
-}
-
-#portrait {
-    position: absolute;
-    bottom: 200px;
-    left: 40px;
-    width: 300px;
-    image-rendering: pixelated;
-}
-
-#textbox {
-    position: fixed;
-    bottom: 0;
-    left: 50%;
-    transform: translateX(-50%);
-    width: 900px;
-    height: 200px;
-    background: white;
-    border-top: 6px solid #f6a5c0;
-    box-shadow: 0 -5px 25px rgba(0,0,0,0.4);
-    padding: 20px 30px;
-    display: none;
-}
-
-#namebox {
-    position: absolute;
-    top: -36px;
-    left: 20px;
-    background: #f6a5c0;
-    color: white;
-    padding: 8px 16px;
-    font-weight: bold;
-    border-radius: 6px 6px 0 0;
-}
-
-#text {
-    font-size: 22px;
-    color: #222;
-    line-height: 1.4;
-}
-
-#next {
-    position: absolute;
-    bottom: 10px;
-    right: 20px;
-    font-size: 14px;
-    opacity: 0.5;
-}
+body { margin: 0; background: #111; font-family: Arial, sans-serif; }
+#scene { position: relative; width: 100vw; height: 100vh; }
+#portrait { position: absolute; bottom: 200px; left: 40px; width: 300px; }
+#textbox { position: fixed; bottom: 0; left: 50%; transform: translateX(-50%); width: 900px; height: 200px; background: white; border-top: 6px solid #f6a5c0; box-shadow: 0 -5px 25px rgba(0,0,0,0.4); padding: 20px 30px; display: none; }
+#namebox { position: absolute; top: -36px; left: 20px; background: #f6a5c0; color: white; padding: 8px 16px; font-weight: bold; border-radius: 6px 6px 0 0; }
+#text { font-size: 22px; color: #222; line-height: 1.4; }
+#next { position: absolute; bottom: 10px; right: 20px; font-size: 14px; opacity: 0.5; }
 </style>
 </head>
 <body>
 
-<div id="scene">
-    <img id="portrait" src="" />
-</div>
-
-<div id="textbox">
-    <div id="namebox"></div>
-    <div id="text"></div>
-    <div id="next">▶ Click</div>
-</div>
+<div id="scene"><img id="portrait" /></div>
+<div id="textbox"><div id="namebox"></div><div id="text"></div><div id="next">▶ Click</div></div>
 
 <script>
 let dialogue = [];
 let characterData = {};
-let index = 0;
-let charIndex = 0;
-let typing = false;
+let imageBase = '';
+let index = 0, charIndex = 0, typing = false;
 
 const textbox = document.getElementById('textbox');
 const namebox = document.getElementById('namebox');
 const textEl = document.getElementById('text');
 const portrait = document.getElementById('portrait');
 
+// EDIT THESE IF YOU ADD MORE CHARACTERS
+const DIALOGUE_PATH = 'assets/dialogue.json';
+const CHARACTERDATA_PATH = 'assets/characters/katz/characterdata.json';
+
 Promise.all([
-    fetch('assets/dialogue.json')
-        .then(r => r.json()),
-    fetch('assets/katz/characterdata.json').then(r => r.json())
-]).then(([dialogueJson, charJson]) => {
-    dialogue = dialogueJson.dialogue;
-    characterData = charJson;
-    showTextbox();
-}).catch(err => console.error(err));
+  fetch(DIALOGUE_PATH).then(r => r.json()),
+  fetch(CHARACTERDATA_PATH).then(r => r.json())
+]).then(([d, c]) => {
+  dialogue = d.dialogue;
+  characterData = c;
+  // Use the folder of characterdata.json as image base (robust even if prefix is wrong)
+  imageBase = CHARACTERDATA_PATH.substring(0, CHARACTERDATA_PATH.lastIndexOf('/') + 1);
+  showTextbox();
+});
 
-function showTextbox() {
-    textbox.style.display = 'block';
-    startLine();
+function showTextbox(){ textbox.style.display = 'block'; startLine(); }
+
+function startLine(){
+  typing = true; charIndex = 0; textEl.textContent = '';
+  const line = dialogue[index];
+  namebox.textContent = line.name || '';
+  if(line.expression && characterData.list[line.expression]){
+    portrait.src = imageBase + characterData.list[line.expression] + '.png';
+    portrait.style.display = 'block';
+  }
+  type();
 }
 
-function startLine() {
-    typing = true;
-    charIndex = 0;
-    textEl.textContent = '';
-
-    const line = dialogue[index];
-    namebox.textContent = line.name;
-
-    if (line.expression && characterData.list[line.expression]) {
-        portrait.src = characterData.prefix + characterData.list[line.expression] + '.png';
-        portrait.style.display = 'block';
-    }
-
-    type();
+function type(){
+  const line = dialogue[index];
+  if(charIndex < line.text.length){
+    textEl.textContent += line.text.charAt(charIndex++);
+    setTimeout(type, 30);
+  } else typing = false;
 }
 
-function type() {
-    const line = dialogue[index];
-    if (charIndex < line.text.length) {
-        textEl.textContent += line.text.charAt(charIndex);
-        charIndex++;
-        setTimeout(type, 30);
-    } else {
-        typing = false;
-    }
+function nextLine(){
+  if(typing){ textEl.textContent = dialogue[index].text; typing = false; return; }
+  index++;
+  if(index < dialogue.length) startLine();
+  else { textbox.style.display = 'none'; portrait.style.display = 'none'; }
 }
-
-function nextLine() {
-    if (typing) {
-        textEl.textContent = dialogue[index].text;
-        typing = false;
-        return;
-    }
-    index++;
-    if (index < dialogue.length) {
-        startLine();
-    } else {
-        textbox.style.display = 'none';
-        portrait.style.display = 'none';
-    }
-}
-
-document.addEventListener('click', nextLine);
-</script>
-</body>
-</html>
-
 
 document.addEventListener('click', nextLine);
 </script>
