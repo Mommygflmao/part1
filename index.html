@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>DDLC Style Textbox (JSON)</title>
+<style>
+body {
+    margin: 0;
+    background: #111;
+    font-family: Arial, sans-serif;
+}
+
+#textbox {
+    position: fixed;
+    bottom: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 900px;
+    height: 200px;
+    background: white;
+    border-top: 6px solid #f6a5c0;
+    box-shadow: 0 -5px 25px rgba(0,0,0,0.4);
+    padding: 20px 30px;
+    display: none;
+}
+
+#namebox {
+    position: absolute;
+    top: -36px;
+    left: 20px;
+    background: #f6a5c0;
+    color: white;
+    padding: 8px 16px;
+    font-weight: bold;
+    border-radius: 6px 6px 0 0;
+}
+
+#text {
+    font-size: 22px;
+    color: #222;
+    line-height: 1.4;
+}
+
+#next {
+    position: absolute;
+    bottom: 10px;
+    right: 20px;
+    font-size: 14px;
+    opacity: 0.5;
+}
+</style>
+</head>
+<body>
+
+<div id="textbox">
+    <div id="namebox"></div>
+    <div id="text"></div>
+    <div id="next">▶ Click</div>
+</div>
+
+<script>
+let dialogue = [];
+let index = 0;
+let charIndex = 0;
+let typing = false;
+
+const textbox = document.getElementById('textbox');
+const namebox = document.getElementById('namebox');
+const textEl = document.getElementById('text');
+
+fetch('dialogue.json')
+    .then(res => res.json())
+    .then(data => {
+        dialogue = data.dialogue;
+        showTextbox();
+    })
+    .catch(err => console.error('Failed to load dialogue.json', err));
+
+function showTextbox() {
+    textbox.style.display = 'block';
+    startLine();
+}
+
+function startLine() {
+    typing = true;
+    charIndex = 0;
+    textEl.textContent = '';
+    namebox.textContent = dialogue[index].name;
+    type();
+}
+
+function type() {
+    if (charIndex < dialogue[index].text.length) {
+        textEl.textContent += dialogue[index].text.charAt(charIndex);
+        charIndex++;
+        setTimeout(type, 30);
+    } else {
+        typing = false;
+    }
+}
+
+function nextLine() {
+    if (typing) {
+        textEl.textContent = dialogue[index].text;
+        typing = false;
+        return;
+    }
+    index++;
+    if (index < dialogue.length) {
+        startLine();
+    } else {
+        textbox.style.display = 'none';
+    }
+}
+
+document.addEventListener('click', nextLine);
+</script>
+</body>
+</html>
