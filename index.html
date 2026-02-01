@@ -33,14 +33,20 @@ const portrait = document.getElementById('portrait');
 const DIALOGUE_PATH = 'assets/dialogue.json';
 const CHARACTERDATA_PATH = 'assets/characters/katz/characterdata.json';
 
-Promise.all([
-  fetch(DIALOGUE_PATH).then(r => r.json()),
-  fetch(CHARACTERDATA_PATH).then(r => r.json())
-]).then(([d, c]) => {
-  dialogue = d.dialogue;
-  characterData = c;
-  // Use the folder of characterdata.json as image base (robust even if prefix is wrong)
-  imageBase = CHARACTERDATA_PATH.substring(0, CHARACTERDATA_PATH.lastIndexOf('/') + 1);
+function loadDialogue(){
+  return Promise.all([
+    fetch(DIALOGUE_PATH + '?v=' + Date.now(), { cache: 'no-store' }).then(r => r.json()),
+    fetch(CHARACTERDATA_PATH + '?v=' + Date.now(), { cache: 'no-store' }).then(r => r.json())
+  ]).then(([d, c]) => {
+    dialogue = d.dialogue || [];
+    characterData = c;
+    imageBase = CHARACTERDATA_PATH.substring(0, CHARACTERDATA_PATH.lastIndexOf('/') + 1);
+    index = 0;
+    showTextbox();
+  }).catch(err => console.error('Load failed', err));
+}
+
+loadDialogue();
   showTextbox();
 });
 
@@ -71,6 +77,21 @@ function nextLine(){
   if(index < dialogue.length) startLine();
   else { textbox.style.display = 'none'; portrait.style.display = 'none'; }
 }
+
+document.addEventListener('click', nextLine);
+
+// Press R to reload dialogue.json live (GitHub Pages cache-safe)
+document.addEventListener('keydown', (e) => {
+  if (e.key.toLowerCase() === 'r') {
+    textbox.style.display = 'none';
+    portrait.style.display = 'none';
+    loadDialogue();
+  }
+});
+</script>
+</body>
+</html>
+
 
 document.addEventListener('click', nextLine);
 </script>
