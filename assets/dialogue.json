@@ -2,18 +2,23 @@
   "dialogue": [
     {
       "name": "katz",
-      "text": "Hey... you're actually reading this?",
+      "text": "hey what up my good man",
       "expression": "1"
     },
     {
       "name": "katz",
-      "text": "That's kinda embarrassing.",
-      "expression": "3"
+      "text": "just testing this shit out",
+      "expression": "6"
     },
     {
       "name": "katz",
-      "text": "But also... nice.",
+      "text": "i got it working tho",
       "expression": "5"
-    }
+    },
+    {
+      "name": "katz",
+      "text": "hope this shit becomes better or whatever",
+      "expression": "3"
+    },
   ]
 }
