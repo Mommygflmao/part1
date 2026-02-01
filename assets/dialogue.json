@@ -3,22 +3,16 @@
     {
       "name": "katz",
       "text": "hey what up my good man",
-      "expression": "1"
+      "expression": "1",
+      "position": "left",   // "left", "center", or "right"
+      "flip": false         // true or false
     },
     {
       "name": "katz",
       "text": "just testing this shit out",
-      "expression": "6"
-    },
-    {
-      "name": "katz",
-      "text": "i got it working tho",
-      "expression": "5"
-    },
-    {
-      "name": "katz",
-      "text": "hope this shit becomes better or whatever",
-      "expression": "3"
+      "expression": "6",
+      "position": "right",
+      "flip": true
     }
   ]
 }
