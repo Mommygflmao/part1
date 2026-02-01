@@ -1,7 +1,19 @@
 {
   "dialogue": [
-    { "name": "Sayori", "text": "Heeeey!!" },
-    { "name": "Sayori", "text": "You came back today, just like you promised~" },
-    { "name": "Monika", "text": "Ahaha... let's get started, shall we?" }
+    {
+      "name": "katz",
+      "text": "Hey... you're actually reading this?",
+      "expression": "1"
+    },
+    {
+      "name": "katz",
+      "text": "That's kinda embarrassing.",
+      "expression": "3"
+    },
+    {
+      "name": "katz",
+      "text": "But also... nice.",
+      "expression": "5"
+    }
   ]
 }
