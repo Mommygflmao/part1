@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Pro DDLC Textbox - JSON Integrated</title>
+<title>Pro DDLC Textbox - Fixed Pathing</title>
 <style>
   :root {
     --textbox-width: 900px;
@@ -36,7 +36,6 @@
     z-index: 2;
     display: none;
     pointer-events: none;
-    transition: opacity 0.2s ease;
   }
 
   #textbox {
@@ -72,8 +71,8 @@
     text-align: center;
   }
 
-  #text { font-size: 22px; line-height: 1.4; white-space: pre-wrap; overflow: auto; height: 100%; }
-  #next { position: absolute; bottom: 10px; right: 20px; font-size: 12px; opacity: 0.5; }
+  #text { font-size: 22px; line-height: 1.4; white-space: pre-wrap; overflow: auto; height: 100%; color: var(--text-color); }
+  #next { position: absolute; bottom: 10px; right: 20px; font-size: 12px; opacity: 0.5; color: var(--text-color); }
 
   @media (max-width: 600px) { #portrait { display: none; } #text { font-size: 18px; } }
 </style>
@@ -85,7 +84,7 @@
   <img id="portrait" alt="character portrait" />
 </div>
 
-<div id="textbox" tabindex="0">
+<div id="textbox">
   <div id="namebox"></div>
   <div id="text"></div>
   <div id="next">▶</div>
@@ -95,7 +94,7 @@
 /** CONFIG **/
 const DIALOGUE_PATH = 'assets/dialogue.json';
 const CHARACTER_DATA_PATH = 'assets/characters/katz/characterdata.json';
-const BG_DATA_PATH = 'assets/bgs/bgdata.json'; 
+const BG_DATA_PATH = 'assets/bg/bgdata.json'; 
 
 /** STATE **/
 let dialogue = [];
@@ -111,24 +110,28 @@ const portrait = document.getElementById('portrait');
 const bgImg = document.getElementById('bg');
 
 /** PATH RESOLVER **/
-// Handles the mapping from the JSON "list" and "prefix"
-function getFullUrl(key, dataObj) {
+// This is the "brain" that fixes your image loading
+function getFullUrl(key, dataObj, jsonSourcePath) {
   if (!key || !dataObj || !dataObj.list) return key;
   
-  let file = dataObj.list[key];
-  if (!file) return key; // Fallback if key not in list
+  let fileName = dataObj.list[key];
+  if (!fileName) return key; 
   
-  if (typeof file === 'object') file = file.file;
+  if (typeof fileName === 'object') fileName = fileName.file;
   
-  // Add .png if no extension exists
-  if (!/(\.[a-zA-Z0-9]+)$/.test(file)) file += '.png';
+  // Ensure extension
+  if (!/(\.[a-zA-Z0-9]+)$/.test(fileName)) fileName += '.png';
   
-  const prefix = dataObj.prefix || '';
-  if (prefix) {
-    const cleanPrefix = prefix.endsWith('/') ? prefix : prefix + '/';
-    return cleanPrefix + file;
-  }
-  return file;
+  // 1. If JSON has a prefix, use it
+  if (dataObj.prefix) {
+    const p = dataObj.prefix.endsWith('/') ? dataObj.prefix : dataObj.prefix + '/';
+    return p + fileName;
+  } 
+  
+  // 2. If no prefix, assume images are in the same folder as the JSON
+  const lastSlash = jsonSourcePath.lastIndexOf('/');
+  const baseDir = lastSlash >= 0 ? jsonSourcePath.substring(0, lastSlash + 1) : '';
+  return baseDir + fileName;
 }
 
 function preload(url) {
@@ -156,8 +159,8 @@ async function loadAll() {
       startLine();
     }
   } catch (e) {
-    console.error("Critical Load Error:", e);
-    textEl.textContent = "Error: Could not load JSON data. Check file paths.";
+    console.error("Load Error:", e);
+    textEl.textContent = "Error: Check console. One of your JSON paths might be wrong.";
     textbox.style.display = 'block';
   }
 }
@@ -168,7 +171,6 @@ function startLine() {
   charIndex = 0;
   textEl.textContent = '';
   const line = dialogue[index];
-  
   if (!line) return;
 
   namebox.textContent = line.name || '';
@@ -176,20 +178,18 @@ function startLine() {
 
   // 1. SET PORTRAIT
   if (line.expression) {
-    const portraitUrl = getFullUrl(line.expression, characterData);
-    if (portrait.src !== portraitUrl) {
-        portrait.src = portraitUrl;
-    }
+    const portraitUrl = getFullUrl(line.expression, characterData, CHARACTER_DATA_PATH);
+    portrait.src = portraitUrl;
     portrait.style.display = 'block';
+    portrait.onerror = () => { portrait.style.display = 'none'; };
   } else {
     portrait.style.display = 'none';
   }
 
   // 2. SET BACKGROUND
   if (line.bg) {
-    // Check if line.bg is an object like {file: "1"} or just the string "1"
     const bgKey = (typeof line.bg === 'object') ? line.bg.file : line.bg;
-    const newBgSrc = getFullUrl(bgKey, bgData);
+    const newBgSrc = getFullUrl(bgKey, bgData, BG_DATA_PATH);
     
     if (!bgImg.src.includes(newBgSrc)) {
       bgImg.style.opacity = 0; 
@@ -200,13 +200,13 @@ function startLine() {
     }
   }
 
-  // 3. LOOK-AHEAD PRELOAD (The Speed Boost)
+  // 3. PRELOAD NEXT
   if (index + 1 < dialogue.length) {
     const next = dialogue[index + 1];
-    if (next.expression) preload(getFullUrl(next.expression, characterData));
+    if (next.expression) preload(getFullUrl(next.expression, characterData, CHARACTER_DATA_PATH));
     if (next.bg) {
-      const nextBgKey = (typeof next.bg === 'object') ? next.bg.file : next.bg;
-      preload(getFullUrl(nextBgKey, bgData));
+      const nextKey = (typeof next.bg === 'object') ? next.bg.file : next.bg;
+      preload(getFullUrl(nextKey, bgData, BG_DATA_PATH));
     }
   }
 
@@ -217,7 +217,6 @@ function type() {
   const fullText = dialogue[index]?.text || '';
   if (charIndex < fullText.length) {
     textEl.textContent += fullText.charAt(charIndex++);
-    // Type speed: 30ms
     setTimeout(type, 30);
   } else {
     typing = false;
@@ -226,35 +225,22 @@ function type() {
 
 function nextLine() {
   if (typing) {
-    // Instant finish typing
     textEl.textContent = dialogue[index].text;
     typing = false;
     return;
   }
   index++;
-  if (index < dialogue.length) {
-    startLine();
-  } else {
-    // End of script
-    textbox.style.display = 'none';
-    portrait.style.display = 'none';
-  }
+  if (index < dialogue.length) startLine();
+  else textbox.style.display = 'none';
 }
 
 /** INPUTS **/
-window.addEventListener('click', (e) => {
-  if (textbox.style.display !== 'none') nextLine();
-});
-
+window.addEventListener('click', () => { if(textbox.style.display !== 'none') nextLine(); });
 window.addEventListener('keydown', (e) => {
   if (textbox.style.display === 'none') return;
-  if (e.key === ' ' || e.key === 'Enter') {
-    e.preventDefault();
-    nextLine();
-  }
+  if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); nextLine(); }
 });
 
-// Start
 loadAll();
 </script>
 </body>
