@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Pro DDLC Textbox - Optimized</title>
+<title>Pro DDLC Textbox - JSON BG Mapping</title>
 <style>
   :root {
     --textbox-width: 900px;
@@ -14,6 +14,7 @@
   }
   html,body { height:100%; margin:0; background:var(--bg-color); color:#fff; font-family: Arial, sans-serif; overflow: hidden; }
   #scene { position: relative; width: 100vw; height: 100vh; overflow: hidden; }
+  
   #bg {
     position: absolute;
     inset: 0;
@@ -21,12 +22,10 @@
     height: 100%;
     object-fit: cover;
     z-index: 0;
-    user-select: none;
-    pointer-events: none;
-    filter: brightness(0.95);
     background: #000;
-    transition: opacity 0.5s ease;
+    transition: opacity 0.4s ease-in-out; /* Smooth transition */
   }
+
   #portrait {
     position: absolute;
     right: 40px;
@@ -36,9 +35,9 @@
     min-width: 160px;
     z-index: 2;
     display: none;
-    user-select: none;
     pointer-events: none;
   }
+
   #textbox {
     position: fixed;
     bottom: 0;
@@ -47,10 +46,8 @@
     width: var(--textbox-width);
     max-width: calc(100vw - 40px);
     height: var(--textbox-height);
-    max-height: 50vh;
     background: #fff;
     border-top: 6px solid var(--accent);
-    box-shadow: 0 -5px 25px rgba(0,0,0,0.4);
     border-radius: 10px 10px 0 0;
     padding: 18px 22px;
     box-sizing: border-box;
@@ -59,6 +56,7 @@
     z-index: 3;
     cursor: pointer;
   }
+
   #namebox {
     position: absolute;
     top: -36px;
@@ -69,16 +67,11 @@
     font-weight: bold;
     border-radius: 6px 6px 0 0;
     min-width: 80px;
-    box-sizing: border-box;
-    text-align: center;
   }
-  #text { font-size: 22px; color: var(--text-color); line-height: 1.4; white-space: pre-wrap; word-break: break-word; max-height: calc(var(--textbox-height) - 60px); overflow:auto; }
-  #next { position: absolute; bottom: 10px; right: 20px; font-size: 14px; opacity: 0.75; color: var(--text-color); user-select:none; }
-  
-  @media (max-width: 600px) {
-    #portrait { display: none; }
-    #text { font-size: 18px; }
-  }
+
+  #text { font-size: 22px; line-height: 1.4; white-space: pre-wrap; overflow: auto; height: 100%; }
+
+  @media (max-width: 600px) { #portrait { display: none; } }
 </style>
 </head>
 <body>
@@ -88,45 +81,42 @@
   <img id="portrait" alt="character portrait" />
 </div>
 
-<div id="textbox" role="button" tabindex="0">
+<div id="textbox">
   <div id="namebox"></div>
   <div id="text"></div>
-  <div id="next">▶ Click or press Space/Enter</div>
 </div>
 
 <script>
-/** CONFIGURATION **/
-const DIALOGUE_PATH = 'assets/dialogue.json'; 
-const CHARACTERDATA_PATH = 'assets/characters/katz/characterdata.json';
+/** CONFIG **/
+const DIALOGUE_PATH = 'assets/dialogue.json';
+const CHARACTER_DATA_PATH = 'assets/characters/katz/characterdata.json';
+const BG_DATA_PATH = 'assets/bg/bgdata.json'; // Path to your new BG JSON
 
 /** STATE **/
 let dialogue = [];
 let characterData = {};
-let imageBase = '';
+let bgData = {};
 let index = 0, charIndex = 0, typing = false;
-let autoUpdateInterval = null;
-const preloadedImages = new Set(); // Prevents redundant downloads
+const preloadedImages = new Set();
 
 const textbox = document.getElementById('textbox');
 const namebox = document.getElementById('namebox');
 const textEl = document.getElementById('text');
 const portrait = document.getElementById('portrait');
-const bg = document.getElementById('bg');
+const bgImg = document.getElementById('bg');
 
-/** HELPERS **/
-function resolvePath(candidate, baseForRelative) {
-  if (!candidate) return candidate;
-  if (/^https?:\/\//i.test(candidate)) return candidate;
-  try {
-    const base = baseForRelative || window.location.href;
-    return new URL(candidate, base).toString();
-  } catch (e) { return candidate; }
-}
-
-function deriveImageBase(path) {
-  if (!path) return '';
-  const lastSlash = path.lastIndexOf('/');
-  return lastSlash >= 0 ? path.substring(0, lastSlash + 1) : '';
+/** PATH RESOLVER **/
+function getFullUrl(key, dataObj) {
+  if (!key || !dataObj.list || !dataObj.list[key]) return key;
+  let file = dataObj.list[key];
+  if (typeof file === 'object') file = file.file;
+  
+  // Add extension if missing
+  if (!/(\.[a-zA-Z0-9]+)$/.test(file)) file += '.png';
+  
+  // Use prefix if available
+  const prefix = dataObj.prefix || '';
+  return prefix ? (prefix.endsWith('/') ? prefix + file : prefix + '/' + file) : file;
 }
 
 function preload(url) {
@@ -136,80 +126,66 @@ function preload(url) {
   preloadedImages.add(url);
 }
 
-/** CORE LOGIC **/
-async function loadJSON(path) {
-  const res = await fetch(path, { cache: "no-cache" });
-  if (!res.ok) throw new Error('HTTP ' + res.status);
-  return await res.json();
-}
-
-async function loadData() {
+/** LOAD DATA **/
+async function loadAll() {
   try {
-    imageBase = resolvePath(deriveImageBase(CHARACTERDATA_PATH));
-    const [d, c] = await Promise.all([
-      loadJSON(DIALOGUE_PATH),
-      loadJSON(CHARACTERDATA_PATH)
+    const [d, c, b] = await Promise.all([
+      fetch(DIALOGUE_PATH).then(r => r.json()),
+      fetch(CHARACTER_DATA_PATH).then(r => r.json()),
+      fetch(BG_DATA_PATH).then(r => r.json())
     ]);
 
-    dialogue = Array.isArray(d.dialogue) ? d.dialogue : (Array.isArray(d) ? d : []);
-    characterData = c || {};
+    dialogue = d.dialogue || d;
+    characterData = c;
+    bgData = b;
 
     if (dialogue.length > 0) {
-      index = 0;
-      // Pre-cache first background immediately
-      if (dialogue[0].bg?.file) preload(resolvePath(dialogue[0].bg.file, imageBase));
-      showTextbox();
+      textbox.style.display = 'block';
+      startLine();
     }
-  } catch (err) {
-    console.error('Initial load failed:', err);
-    textEl.textContent = "Error loading assets. Check console.";
+  } catch (e) {
+    console.error("Load Error:", e);
+    textEl.textContent = "Error loading JSON data.";
     textbox.style.display = 'block';
   }
-}
-
-function showTextbox() {
-  textbox.style.display = 'block';
-  startLine();
 }
 
 function startLine() {
   typing = true;
   charIndex = 0;
   textEl.textContent = '';
-  const line = dialogue[index] || { name: '', text: '' };
+  const line = dialogue[index];
   namebox.textContent = line.name || '';
 
-  // 1. Current Portrait
-  if (line.expression && characterData.list?.[line.expression]) {
-    let entry = characterData.list[line.expression];
-    if (typeof entry === 'object') entry = entry.file;
-    if (!/(\.[a-zA-Z0-9]+)$/.test(entry)) entry += '.png';
-
-    portrait.src = resolvePath(entry, imageBase);
+  // 1. SET PORTRAIT
+  if (line.expression) {
+    portrait.src = getFullUrl(line.expression, characterData);
     portrait.style.display = 'block';
   } else {
     portrait.style.display = 'none';
   }
 
-  // 2. Current Background
-  if (line.bg?.file) {
-    bg.src = resolvePath(line.bg.file, imageBase);
-    bg.style.objectFit = (line.bg.scaleMode?.toLowerCase() === 'fill') ? 'cover' : 'contain';
+  // 2. SET BACKGROUND (Using mapping)
+  if (line.bg) {
+    const bgKey = typeof line.bg === 'object' ? line.bg.file : line.bg;
+    const newBgSrc = getFullUrl(bgKey, bgData);
+    
+    if (bgImg.src !== newBgSrc) {
+      bgImg.style.opacity = 0; // Quick fade out
+      setTimeout(() => {
+        bgImg.src = newBgSrc;
+        bgImg.style.opacity = 1; // Fade back in
+      }, 100);
+    }
   }
 
-  // 3. SMART PRELOAD (Look ahead one step)
+  // 3. PRELOAD NEXT ASSETS
   if (index + 1 < dialogue.length) {
-    const nextLine = dialogue[index + 1];
-    // Cache next expression
-    if (nextLine.expression && characterData.list?.[nextLine.expression]) {
-      let nextExp = characterData.list[nextLine.expression];
-      if (typeof nextExp === 'object') nextExp = nextExp.file;
-      if (!/(\.[a-zA-Z0-9]+)$/.test(nextExp)) nextExp += '.png';
-      preload(resolvePath(nextExp, imageBase));
-    }
-    // Cache next background
-    if (nextLine.bg?.file) {
-      preload(resolvePath(nextLine.bg.file, imageBase));
+    const next = dialogue[index + 1];
+    if (next.expression) preload(getFullUrl(next.expression, characterData));
+    if (next.bg) {
+      const nextBgKey = typeof next.bg === 'object' ? next.bg.file : next.bg;
+      preload(getFullUrl(nextBgKey, bgData));
     }
   }
 
@@ -217,58 +193,33 @@ function startLine() {
 }
 
 function type() {
-  const line = dialogue[index] || { text: '' };
-  const fullText = line.text || '';
+  const fullText = dialogue[index].text || '';
   if (charIndex < fullText.length) {
     textEl.textContent += fullText.charAt(charIndex++);
-    textEl.scrollTop = textEl.scrollHeight;
     setTimeout(type, 30);
   } else {
     typing = false;
   }
 }
 
-function finishTyping() {
-  const line = dialogue[index] || { text: '' };
-  textEl.textContent = line.text || '';
-  typing = false;
-}
-
 function nextLine() {
-  if (typing) { finishTyping(); return; }
+  if (typing) {
+    textEl.textContent = dialogue[index].text;
+    typing = false;
+    return;
+  }
   index++;
-  if (index < dialogue.length) {
-    startLine();
-  } else {
-    textbox.style.display = 'none';
-    portrait.style.display = 'none';
-  }
+  if (index < dialogue.length) startLine();
+  else textbox.style.display = 'none';
 }
 
-/** LISTENERS **/
-document.addEventListener('click', (e) => {
-  if (textbox.style.display !== 'none') nextLine();
+/** INPUT **/
+window.addEventListener('click', nextLine);
+window.addEventListener('keydown', (e) => {
+  if (e.key === ' ' || e.key === 'Enter') nextLine();
 });
 
-document.addEventListener('keydown', (e) => {
-  if (textbox.style.display === 'none') return;
-  if (e.key === ' ' || e.key === 'Enter') {
-    e.preventDefault();
-    nextLine();
-  }
-});
-
-// Auto-update check for remote JSON
-if (/^https?:\/\//i.test(DIALOGUE_PATH)) {
-  setInterval(async () => {
-    try {
-      const d = await loadJSON(DIALOGUE_PATH);
-      dialogue = Array.isArray(d.dialogue) ? d.dialogue : (Array.isArray(d) ? d : []);
-    } catch(e) {}
-  }, 60000);
-}
-
-loadData();
+loadAll();
 </script>
 </body>
 </html>
