@@ -2,10 +2,10 @@
   "dialogue": [
     {
       "name": "katz",
-      "text": "hey what up my good man",
+      "text": "a",
       "expression": "1",
       "bg": {
-        "file": "assets/bgs/classroom.png",
+        "file": "assets/bgs/outsideschool.png",
         "width": 2483,
         "height": 1474,
         "scaleMode": "fit"
