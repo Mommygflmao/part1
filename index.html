@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Pro DDLC Textbox - JSON BG Mapping</title>
+<title>Pro DDLC Textbox - JSON Integrated</title>
 <style>
   :root {
     --textbox-width: 900px;
@@ -23,7 +23,7 @@
     object-fit: cover;
     z-index: 0;
     background: #000;
-    transition: opacity 0.4s ease-in-out; /* Smooth transition */
+    transition: opacity 0.4s ease-in-out;
   }
 
   #portrait {
@@ -36,6 +36,7 @@
     z-index: 2;
     display: none;
     pointer-events: none;
+    transition: opacity 0.2s ease;
   }
 
   #textbox {
@@ -55,6 +56,7 @@
     color: var(--text-color);
     z-index: 3;
     cursor: pointer;
+    box-shadow: 0 -5px 25px rgba(0,0,0,0.5);
   }
 
   #namebox {
@@ -67,11 +69,13 @@
     font-weight: bold;
     border-radius: 6px 6px 0 0;
     min-width: 80px;
+    text-align: center;
   }
 
   #text { font-size: 22px; line-height: 1.4; white-space: pre-wrap; overflow: auto; height: 100%; }
+  #next { position: absolute; bottom: 10px; right: 20px; font-size: 12px; opacity: 0.5; }
 
-  @media (max-width: 600px) { #portrait { display: none; } }
+  @media (max-width: 600px) { #portrait { display: none; } #text { font-size: 18px; } }
 </style>
 </head>
 <body>
@@ -81,16 +85,17 @@
   <img id="portrait" alt="character portrait" />
 </div>
 
-<div id="textbox">
+<div id="textbox" tabindex="0">
   <div id="namebox"></div>
   <div id="text"></div>
+  <div id="next">▶</div>
 </div>
 
 <script>
 /** CONFIG **/
 const DIALOGUE_PATH = 'assets/dialogue.json';
 const CHARACTER_DATA_PATH = 'assets/characters/katz/characterdata.json';
-const BG_DATA_PATH = 'assets/bg/bgdata.json'; // Path to your new BG JSON
+const BG_DATA_PATH = 'assets/bgs/bgdata.json'; 
 
 /** STATE **/
 let dialogue = [];
@@ -106,17 +111,24 @@ const portrait = document.getElementById('portrait');
 const bgImg = document.getElementById('bg');
 
 /** PATH RESOLVER **/
+// Handles the mapping from the JSON "list" and "prefix"
 function getFullUrl(key, dataObj) {
-  if (!key || !dataObj.list || !dataObj.list[key]) return key;
+  if (!key || !dataObj || !dataObj.list) return key;
+  
   let file = dataObj.list[key];
+  if (!file) return key; // Fallback if key not in list
+  
   if (typeof file === 'object') file = file.file;
   
-  // Add extension if missing
+  // Add .png if no extension exists
   if (!/(\.[a-zA-Z0-9]+)$/.test(file)) file += '.png';
   
-  // Use prefix if available
   const prefix = dataObj.prefix || '';
-  return prefix ? (prefix.endsWith('/') ? prefix + file : prefix + '/' + file) : file;
+  if (prefix) {
+    const cleanPrefix = prefix.endsWith('/') ? prefix : prefix + '/';
+    return cleanPrefix + file;
+  }
+  return file;
 }
 
 function preload(url) {
@@ -126,7 +138,7 @@ function preload(url) {
   preloadedImages.add(url);
 }
 
-/** LOAD DATA **/
+/** DATA LOADING **/
 async function loadAll() {
   try {
     const [d, c, b] = await Promise.all([
@@ -144,47 +156,56 @@ async function loadAll() {
       startLine();
     }
   } catch (e) {
-    console.error("Load Error:", e);
-    textEl.textContent = "Error loading JSON data.";
+    console.error("Critical Load Error:", e);
+    textEl.textContent = "Error: Could not load JSON data. Check file paths.";
     textbox.style.display = 'block';
   }
 }
 
+/** GAME ENGINE **/
 function startLine() {
   typing = true;
   charIndex = 0;
   textEl.textContent = '';
   const line = dialogue[index];
+  
+  if (!line) return;
+
   namebox.textContent = line.name || '';
+  namebox.style.display = line.name ? 'block' : 'none';
 
   // 1. SET PORTRAIT
   if (line.expression) {
-    portrait.src = getFullUrl(line.expression, characterData);
+    const portraitUrl = getFullUrl(line.expression, characterData);
+    if (portrait.src !== portraitUrl) {
+        portrait.src = portraitUrl;
+    }
     portrait.style.display = 'block';
   } else {
     portrait.style.display = 'none';
   }
 
-  // 2. SET BACKGROUND (Using mapping)
+  // 2. SET BACKGROUND
   if (line.bg) {
-    const bgKey = typeof line.bg === 'object' ? line.bg.file : line.bg;
+    // Check if line.bg is an object like {file: "1"} or just the string "1"
+    const bgKey = (typeof line.bg === 'object') ? line.bg.file : line.bg;
     const newBgSrc = getFullUrl(bgKey, bgData);
     
-    if (bgImg.src !== newBgSrc) {
-      bgImg.style.opacity = 0; // Quick fade out
+    if (!bgImg.src.includes(newBgSrc)) {
+      bgImg.style.opacity = 0; 
       setTimeout(() => {
         bgImg.src = newBgSrc;
-        bgImg.style.opacity = 1; // Fade back in
-      }, 100);
+        bgImg.onload = () => { bgImg.style.opacity = 1; };
+      }, 50);
     }
   }
 
-  // 3. PRELOAD NEXT ASSETS
+  // 3. LOOK-AHEAD PRELOAD (The Speed Boost)
   if (index + 1 < dialogue.length) {
     const next = dialogue[index + 1];
     if (next.expression) preload(getFullUrl(next.expression, characterData));
     if (next.bg) {
-      const nextBgKey = typeof next.bg === 'object' ? next.bg.file : next.bg;
+      const nextBgKey = (typeof next.bg === 'object') ? next.bg.file : next.bg;
       preload(getFullUrl(nextBgKey, bgData));
     }
   }
@@ -193,9 +214,10 @@ function startLine() {
 }
 
 function type() {
-  const fullText = dialogue[index].text || '';
+  const fullText = dialogue[index]?.text || '';
   if (charIndex < fullText.length) {
     textEl.textContent += fullText.charAt(charIndex++);
+    // Type speed: 30ms
     setTimeout(type, 30);
   } else {
     typing = false;
@@ -204,21 +226,35 @@ function type() {
 
 function nextLine() {
   if (typing) {
+    // Instant finish typing
     textEl.textContent = dialogue[index].text;
     typing = false;
     return;
   }
   index++;
-  if (index < dialogue.length) startLine();
-  else textbox.style.display = 'none';
+  if (index < dialogue.length) {
+    startLine();
+  } else {
+    // End of script
+    textbox.style.display = 'none';
+    portrait.style.display = 'none';
+  }
 }
 
-/** INPUT **/
-window.addEventListener('click', nextLine);
-window.addEventListener('keydown', (e) => {
-  if (e.key === ' ' || e.key === 'Enter') nextLine();
+/** INPUTS **/
+window.addEventListener('click', (e) => {
+  if (textbox.style.display !== 'none') nextLine();
 });
 
+window.addEventListener('keydown', (e) => {
+  if (textbox.style.display === 'none') return;
+  if (e.key === ' ' || e.key === 'Enter') {
+    e.preventDefault();
+    nextLine();
+  }
+});
+
+// Start
 loadAll();
 </script>
 </body>
