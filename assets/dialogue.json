@@ -1,9 +1,9 @@
 {
   "dialogue": [
     {
-      "name": "katz",
-      "text": "a",
-      "expression": "1",
+      "name": "",
+      "text": "(You wake up in the morning while the sun shines in your room)",
+      "expression": "",
       "bg": {
         "file": "assets/bgs/outsideschool.png",
         "width": 2483,
@@ -12,9 +12,9 @@
       }
     },
     {
-      "name": "katz",
-      "text": "just testing this shit out",
-      "expression": "6",
+      "name": "",
+      "text": "(everything is fine until)",
+      "expression": "",
       "bg": {
         "file": "assets/bgs/classroom.png",
         "width": 2483,
@@ -24,7 +24,7 @@
     },
     {
       "name": "",
-      "text": "The room is quiet for a moment...",
+      "text": "(NIGGA YOU FORGOT IT THE FIRST DAY OF YOUR GHETTO ASS SCHOOL)",
       "expression": "",
       "bg": {
         "file": "assets/bgs/classroom.png",
