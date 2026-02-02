@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Pro DDLC Textbox - Fixed Pathing</title>
+<title>Pro DDLC Textbox - Final Fix</title>
 <style>
   :root {
     --textbox-width: 900px;
@@ -94,7 +94,7 @@
 /** CONFIG **/
 const DIALOGUE_PATH = 'assets/dialogue.json';
 const CHARACTER_DATA_PATH = 'assets/characters/katz/characterdata.json';
-const BG_DATA_PATH = 'assets/bgs/bgdata.json'; 
+const BG_DATA_PATH = 'assets/bg/bgdata.json'; 
 
 /** STATE **/
 let dialogue = [];
@@ -110,25 +110,25 @@ const portrait = document.getElementById('portrait');
 const bgImg = document.getElementById('bg');
 
 /** PATH RESOLVER **/
-// This is the "brain" that fixes your image loading
 function getFullUrl(key, dataObj, jsonSourcePath) {
   if (!key || !dataObj || !dataObj.list) return key;
   
   let fileName = dataObj.list[key];
   if (!fileName) return key; 
-  
   if (typeof fileName === 'object') fileName = fileName.file;
   
   // Ensure extension
   if (!/(\.[a-zA-Z0-9]+)$/.test(fileName)) fileName += '.png';
   
-  // 1. If JSON has a prefix, use it
+  // Resolve Prefix:
+  // If prefix starts with http or /, use it as absolute.
+  // Otherwise, treat it as relative to the ROOT of your site.
   if (dataObj.prefix) {
     const p = dataObj.prefix.endsWith('/') ? dataObj.prefix : dataObj.prefix + '/';
     return p + fileName;
   } 
   
-  // 2. If no prefix, assume images are in the same folder as the JSON
+  // Fallback: use the JSON's own folder
   const lastSlash = jsonSourcePath.lastIndexOf('/');
   const baseDir = lastSlash >= 0 ? jsonSourcePath.substring(0, lastSlash + 1) : '';
   return baseDir + fileName;
@@ -160,7 +160,7 @@ async function loadAll() {
     }
   } catch (e) {
     console.error("Load Error:", e);
-    textEl.textContent = "Error: Check console. One of your JSON paths might be wrong.";
+    textEl.textContent = "Error loading files. Check console for path errors.";
     textbox.style.display = 'block';
   }
 }
@@ -176,9 +176,10 @@ function startLine() {
   namebox.textContent = line.name || '';
   namebox.style.display = line.name ? 'block' : 'none';
 
-  // 1. SET PORTRAIT
+  // 1. PORTRAIT
   if (line.expression) {
     const portraitUrl = getFullUrl(line.expression, characterData, CHARACTER_DATA_PATH);
+    console.log("Loading Portrait:", portraitUrl); // DEBUG: check console if it fails
     portrait.src = portraitUrl;
     portrait.style.display = 'block';
     portrait.onerror = () => { portrait.style.display = 'none'; };
@@ -186,7 +187,7 @@ function startLine() {
     portrait.style.display = 'none';
   }
 
-  // 2. SET BACKGROUND
+  // 2. BACKGROUND
   if (line.bg) {
     const bgKey = (typeof line.bg === 'object') ? line.bg.file : line.bg;
     const newBgSrc = getFullUrl(bgKey, bgData, BG_DATA_PATH);
@@ -200,7 +201,7 @@ function startLine() {
     }
   }
 
-  // 3. PRELOAD NEXT
+  // 3. PRELOAD
   if (index + 1 < dialogue.length) {
     const next = dialogue[index + 1];
     if (next.expression) preload(getFullUrl(next.expression, characterData, CHARACTER_DATA_PATH));
