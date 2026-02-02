@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Pro DDLC Textbox (JSON + Character Packs + BGS)</title>
+<title>Pro DDLC Textbox - Optimized</title>
 <style>
   :root {
     --textbox-width: 900px;
@@ -12,7 +12,7 @@
     --bg-color: #111;
     --text-color: #222;
   }
-  html,body { height:100%; margin:0; background:var(--bg-color); color:#fff; font-family: Arial, sans-serif; }
+  html,body { height:100%; margin:0; background:var(--bg-color); color:#fff; font-family: Arial, sans-serif; overflow: hidden; }
   #scene { position: relative; width: 100vw; height: 100vh; overflow: hidden; }
   #bg {
     position: absolute;
@@ -25,6 +25,7 @@
     pointer-events: none;
     filter: brightness(0.95);
     background: #000;
+    transition: opacity 0.5s ease;
   }
   #portrait {
     position: absolute;
@@ -56,6 +57,7 @@
     display: none;
     color: var(--text-color);
     z-index: 3;
+    cursor: pointer;
   }
   #namebox {
     position: absolute;
@@ -68,9 +70,11 @@
     border-radius: 6px 6px 0 0;
     min-width: 80px;
     box-sizing: border-box;
+    text-align: center;
   }
   #text { font-size: 22px; color: var(--text-color); line-height: 1.4; white-space: pre-wrap; word-break: break-word; max-height: calc(var(--textbox-height) - 60px); overflow:auto; }
   #next { position: absolute; bottom: 10px; right: 20px; font-size: 14px; opacity: 0.75; color: var(--text-color); user-select:none; }
+  
   @media (max-width: 600px) {
     #portrait { display: none; }
     #text { font-size: 18px; }
@@ -79,35 +83,29 @@
 </head>
 <body>
 
-<div id="scene" aria-hidden="false">
+<div id="scene">
   <img id="bg" alt="background" />
   <img id="portrait" alt="character portrait" />
 </div>
 
-<div id="textbox" role="region" aria-label="dialogue textbox" aria-live="polite">
-  <div id="namebox" aria-hidden="true"></div>
-  <div id="text" aria-atomic="false"></div>
+<div id="textbox" role="button" tabindex="0">
+  <div id="namebox"></div>
+  <div id="text"></div>
   <div id="next">▶ Click or press Space/Enter</div>
 </div>
 
 <script>
-/*
-  Notes:
-  - Place your JSON at assets/dialogue.json by default.
-  - Place character packs at assets/characters/... by default.
-  - characterdata.list entries can be:
-      - full URL ("https://.../portrait.png")
-      - relative path ("portraits/portrait1.png")
-      - filename without ext ("portrait1") -> .png will be appended
-  - dialogue entries may include:
-      { name: "Name", expression: "idle", text: "Hello", bg: { file: "assets/bg.png", scaleMode: "fill" } }
-*/
+/** CONFIGURATION **/
+const DIALOGUE_PATH = 'assets/dialogue.json'; 
+const CHARACTERDATA_PATH = 'assets/characters/katz/characterdata.json';
 
+/** STATE **/
 let dialogue = [];
 let characterData = {};
 let imageBase = '';
 let index = 0, charIndex = 0, typing = false;
 let autoUpdateInterval = null;
+const preloadedImages = new Set(); // Prevents redundant downloads
 
 const textbox = document.getElementById('textbox');
 const namebox = document.getElementById('namebox');
@@ -115,64 +113,39 @@ const textEl = document.getElementById('text');
 const portrait = document.getElementById('portrait');
 const bg = document.getElementById('bg');
 
-// EDIT THESE PATHS as needed (default: relative to this HTML)
-const DIALOGUE_PATH = 'assets/dialogue.json'; // can be a remote raw URL too
-const CHARACTERDATA_PATH = 'assets/characters/katz/characterdata.json'; // path or URL
-
-// Helper resolve function: accepts absolute URLs, absolute paths, or relative paths and returns absolute URL
+/** HELPERS **/
 function resolvePath(candidate, baseForRelative) {
   if (!candidate) return candidate;
-  // If it's already an absolute URL
   if (/^https?:\/\//i.test(candidate)) return candidate;
   try {
-    // If candidate is root-anchored (starts with /), resolve against origin
-    if (candidate.startsWith('/')) {
-      return new URL(candidate, window.location.origin).toString();
-    }
-    // Otherwise resolve relative to provided base or page location
     const base = baseForRelative || window.location.href;
     return new URL(candidate, base).toString();
-  } catch (e) {
-    // Fallback: return candidate as-is
-    return candidate;
-  }
+  } catch (e) { return candidate; }
 }
 
-function deriveImageBase(characterPath) {
-  // Return a base URL to resolve relative image entries
-  if (!characterPath) return '';
-  if (/^https?:\/\//i.test(characterPath)) {
-    try {
-      const url = new URL(characterPath);
-      url.pathname = url.pathname.substring(0, url.pathname.lastIndexOf('/') + 1);
-      return url.toString();
-    } catch (e) {
-      return '';
-    }
-  } else {
-    // relative path: get directory part and resolve against current document
-    const lastSlash = characterPath.lastIndexOf('/');
-    const dir = lastSlash >= 0 ? characterPath.substring(0, lastSlash + 1) : '';
-    return dir ? new URL(dir, window.location.href).toString() : window.location.href;
-  }
+function deriveImageBase(path) {
+  if (!path) return '';
+  const lastSlash = path.lastIndexOf('/');
+  return lastSlash >= 0 ? path.substring(0, lastSlash + 1) : '';
 }
 
+function preload(url) {
+  if (!url || preloadedImages.has(url)) return;
+  const img = new Image();
+  img.src = url;
+  preloadedImages.add(url);
+}
+
+/** CORE LOGIC **/
 async function loadJSON(path) {
-  try {
-    const res = await fetch(path, { cache: "no-cache" });
-    if (!res.ok) throw new Error('HTTP ' + res.status + ' loading ' + path);
-    return await res.json();
-  } catch (err) {
-    throw err;
-  }
+  const res = await fetch(path, { cache: "no-cache" });
+  if (!res.ok) throw new Error('HTTP ' + res.status);
+  return await res.json();
 }
 
 async function loadData() {
   try {
-    // derive imageBase right away (works for both relative and absolute character path)
-    imageBase = deriveImageBase(CHARACTERDATA_PATH);
-
-    // Load dialogue and character data in parallel when possible
+    imageBase = resolvePath(deriveImageBase(CHARACTERDATA_PATH));
     const [d, c] = await Promise.all([
       loadJSON(DIALOGUE_PATH),
       loadJSON(CHARACTERDATA_PATH)
@@ -181,27 +154,21 @@ async function loadData() {
     dialogue = Array.isArray(d.dialogue) ? d.dialogue : (Array.isArray(d) ? d : []);
     characterData = c || {};
 
-    // start if any lines
     if (dialogue.length > 0) {
       index = 0;
+      // Pre-cache first background immediately
+      if (dialogue[0].bg?.file) preload(resolvePath(dialogue[0].bg.file, imageBase));
       showTextbox();
-    } else {
-      // Nothing to show: hide
-      textbox.style.display = 'none';
-      portrait.style.display = 'none';
-      console.info('No dialogue found in', DIALOGUE_PATH);
     }
   } catch (err) {
-    console.error('loadData error:', err);
-    namebox.textContent = 'Error';
-    textEl.textContent = 'Failed to load dialogue or character data. Check console for details.';
+    console.error('Initial load failed:', err);
+    textEl.textContent = "Error loading assets. Check console.";
     textbox.style.display = 'block';
   }
 }
 
 function showTextbox() {
   textbox.style.display = 'block';
-  textbox.focus?.();
   startLine();
 }
 
@@ -212,40 +179,38 @@ function startLine() {
   const line = dialogue[index] || { name: '', text: '' };
   namebox.textContent = line.name || '';
 
-  // handle portrait / expression
-  if (line.expression && characterData.list && characterData.list[line.expression]) {
+  // 1. Current Portrait
+  if (line.expression && characterData.list?.[line.expression]) {
     let entry = characterData.list[line.expression];
-    // If entry is an object with file property, allow that too
-    if (typeof entry === 'object' && entry.file) entry = entry.file;
+    if (typeof entry === 'object') entry = entry.file;
+    if (!/(\.[a-zA-Z0-9]+)$/.test(entry)) entry += '.png';
 
-    // If entry has an extension, use as-is; otherwise append .png
-    if (!/(\.[a-zA-Z0-9]+)$/.test(entry)) {
-      entry = entry + '.png';
-    }
-
-    // Resolve path: if entry is absolute URL, use it; otherwise resolve relative to imageBase
     portrait.src = resolvePath(entry, imageBase);
     portrait.style.display = 'block';
-    portrait.onload = () => { portrait.style.display = 'block'; };
-    portrait.onerror = () => {
-      console.warn('Failed to load portrait:', portrait.src);
-      portrait.style.display = 'none';
-    };
   } else {
     portrait.style.display = 'none';
-    portrait.src = '';
   }
 
-  // handle background
-  if (line.bg && line.bg.file) {
-    const bgFile = line.bg.file;
-    const resolved = resolvePath(bgFile, imageBase);
-    bg.src = resolved;
-    bg.style.objectFit = (line.bg.scaleMode && line.bg.scaleMode.toLowerCase() === 'fill') ? 'cover' : 'contain';
-    bg.onerror = () => { console.warn('Failed to load background:', bg.src); bg.src = ''; };
-  } else {
-    // keep current bg if you want continuity, or clear to none:
-    // bg.src = '';
+  // 2. Current Background
+  if (line.bg?.file) {
+    bg.src = resolvePath(line.bg.file, imageBase);
+    bg.style.objectFit = (line.bg.scaleMode?.toLowerCase() === 'fill') ? 'cover' : 'contain';
+  }
+
+  // 3. SMART PRELOAD (Look ahead one step)
+  if (index + 1 < dialogue.length) {
+    const nextLine = dialogue[index + 1];
+    // Cache next expression
+    if (nextLine.expression && characterData.list?.[nextLine.expression]) {
+      let nextExp = characterData.list[nextLine.expression];
+      if (typeof nextExp === 'object') nextExp = nextExp.file;
+      if (!/(\.[a-zA-Z0-9]+)$/.test(nextExp)) nextExp += '.png';
+      preload(resolvePath(nextExp, imageBase));
+    }
+    // Cache next background
+    if (nextLine.bg?.file) {
+      preload(resolvePath(nextLine.bg.file, imageBase));
+    }
   }
 
   type();
@@ -253,85 +218,57 @@ function startLine() {
 
 function type() {
   const line = dialogue[index] || { text: '' };
-  const text = line.text || '';
-  if (charIndex < text.length) {
-    // handle basic markup for pauses / newlines if needed in future
-    textEl.textContent += text.charAt(charIndex++);
-    // scroll text element if overflow
+  const fullText = line.text || '';
+  if (charIndex < fullText.length) {
+    textEl.textContent += fullText.charAt(charIndex++);
     textEl.scrollTop = textEl.scrollHeight;
     setTimeout(type, 30);
   } else {
     typing = false;
-    // done typing, optionally flash or show next indicator
   }
 }
 
 function finishTyping() {
   const line = dialogue[index] || { text: '' };
   textEl.textContent = line.text || '';
-  textEl.scrollTop = textEl.scrollHeight;
   typing = false;
 }
 
 function nextLine() {
-  if (textbox.style.display === 'none') return; // do nothing if hidden
-  if (dialogue.length === 0) return;
   if (typing) { finishTyping(); return; }
   index++;
-  if (index < dialogue.length) startLine();
-  else {
-    // End of dialogue
+  if (index < dialogue.length) {
+    startLine();
+  } else {
     textbox.style.display = 'none';
     portrait.style.display = 'none';
-    // remove listeners to avoid leaks
-    document.removeEventListener('click', onDocClick);
-    document.removeEventListener('keydown', onKeyDown);
-    if (autoUpdateInterval) clearInterval(autoUpdateInterval);
   }
 }
 
-// Click handler only advances while textbox visible
-function onDocClick(e) {
-  // allow clicks anywhere while textbox visible
+/** LISTENERS **/
+document.addEventListener('click', (e) => {
   if (textbox.style.display !== 'none') nextLine();
-}
+});
 
-// Keyboard navigation
-function onKeyDown(e) {
+document.addEventListener('keydown', (e) => {
   if (textbox.style.display === 'none') return;
   if (e.key === ' ' || e.key === 'Enter') {
     e.preventDefault();
     nextLine();
-  } else if (e.key === 'Escape') {
-    // close/hide
-    textbox.style.display = 'none';
-    portrait.style.display = 'none';
-    document.removeEventListener('click', onDocClick);
-    document.removeEventListener('keydown', onKeyDown);
-    if (autoUpdateInterval) clearInterval(autoUpdateInterval);
   }
+});
+
+// Auto-update check for remote JSON
+if (/^https?:\/\//i.test(DIALOGUE_PATH)) {
+  setInterval(async () => {
+    try {
+      const d = await loadJSON(DIALOGUE_PATH);
+      dialogue = Array.isArray(d.dialogue) ? d.dialogue : (Array.isArray(d) ? d : []);
+    } catch(e) {}
+  }, 60000);
 }
 
-// attach listeners
-document.addEventListener('click', onDocClick);
-document.addEventListener('keydown', onKeyDown);
-
-// initial load
 loadData();
-
-// Optional: If you want auto-reload from a remote source, enable interval.
-// Only enable when DIALOGUE_PATH is a remote URL (http/https).
-try {
-  if (/^https?:\/\//i.test(DIALOGUE_PATH)) {
-    autoUpdateInterval = setInterval(loadData, 60000);
-  }
-} catch (e) { /* ignore */ }
-
-</script>
-</body>
-</html>
-// Optional: Auto-update every 60 seconds from GitHub
-setInterval(loadData, 60000);
 </script>
 </body>
 </html>
