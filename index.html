@@ -2,11 +2,12 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Pro DDLC Textbox (JSON + Character Packs)</title>
+<title>Pro DDLC Textbox (JSON + Character Packs + BGS)</title>
 <style>
-  body { margin: 0; background: #111; font-family: Arial, sans-serif; color: #fff; }
+  body { margin: 0; background: #111; font-family: Arial, sans-serif; color: #fff; overflow: hidden; }
   #scene { position: relative; width: 100vw; height: 100vh; overflow: hidden; }
-  #portrait { position: absolute; bottom: 200px; left: 40px; width: 300px; display: none; }
+  #bg { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 100%; height: 100%; object-fit: contain; z-index: 0; }
+  #portrait { position: absolute; bottom: 200px; left: 40px; width: 300px; z-index: 2; display: none; }
   #textbox {
     position: fixed;
     bottom: 0;
@@ -21,8 +22,9 @@
     border-radius: 10px 10px 0 0;
     padding: 18px 22px;
     box-sizing: border-box;
-    display: none; /* will be shown when dialogue loads */
+    display: none; 
     color: #222;
+    z-index: 3;
   }
   #namebox {
     position: absolute;
@@ -41,7 +43,10 @@
 </head>
 <body>
 
-<div id="scene"><img id="portrait" alt="character portrait" /></div>
+<div id="scene">
+  <img id="bg" alt="background" />
+  <img id="portrait" alt="character portrait" />
+</div>
 <div id="textbox" role="region" aria-label="dialogue textbox">
   <div id="namebox"></div>
   <div id="text"></div>
@@ -58,34 +63,37 @@ const textbox = document.getElementById('textbox');
 const namebox = document.getElementById('namebox');
 const textEl = document.getElementById('text');
 const portrait = document.getElementById('portrait');
+const bg = document.getElementById('bg');
 
-// EDIT THESE IF YOU ADD MORE CHARACTERS
-const DIALOGUE_PATH = 'assets/dialogue.json';
+// EDIT THESE PATHS
+const DIALOGUE_PATH = 'https://raw.githubusercontent.com/USERNAME/REPO/main/assets/dialogue.json'; // GitHub raw URL
 const CHARACTERDATA_PATH = 'assets/characters/katz/characterdata.json';
 
-Promise.all([
-  fetch(DIALOGUE_PATH).then(r => {
-    if (!r.ok) throw new Error('Failed to load dialogue.json');
-    return r.json();
-  }),
-  fetch(CHARACTERDATA_PATH).then(r => {
-    if (!r.ok) throw new Error('Failed to load characterdata.json');
-    return r.json();
-  })
-]).then(([d, c]) => {
-  dialogue = Array.isArray(d.dialogue) ? d.dialogue : (Array.isArray(d) ? d : []);
-  characterData = c || {};
-  // Use the folder of characterdata.json as image base (robust even if prefix is wrong)
-  const lastSlash = CHARACTERDATA_PATH.lastIndexOf('/');
-  imageBase = lastSlash >= 0 ? CHARACTERDATA_PATH.substring(0, lastSlash + 1) : '';
-  if (dialogue.length > 0) showTextbox();
-}).catch(err => {
-  console.error(err);
-  // Optionally show an error to the user
-  namebox.textContent = 'Error';
-  textEl.textContent = 'Failed to load dialogue or character data. See console for details.';
-  textbox.style.display = 'block';
-});
+// Fetch dialogue and character data
+async function loadData() {
+  try {
+    const [dRes, cRes] = await Promise.all([
+      fetch(DIALOGUE_PATH),
+      fetch(CHARACTERDATA_PATH)
+    ]);
+    if (!dRes.ok) throw new Error('Failed to load dialogue.json');
+    if (!cRes.ok) throw new Error('Failed to load characterdata.json');
+    const d = await dRes.json();
+    const c = await cRes.json();
+
+    dialogue = Array.isArray(d.dialogue) ? d.dialogue : (Array.isArray(d) ? d : []);
+    characterData = c || {};
+    const lastSlash = CHARACTERDATA_PATH.lastIndexOf('/');
+    imageBase = lastSlash >= 0 ? CHARACTERDATA_PATH.substring(0, lastSlash + 1) : '';
+
+    if (dialogue.length > 0) showTextbox();
+  } catch (err) {
+    console.error(err);
+    namebox.textContent = 'Error';
+    textEl.textContent = 'Failed to load dialogue or character data.';
+    textbox.style.display = 'block';
+  }
+}
 
 function showTextbox(){ textbox.style.display = 'block'; startLine(); }
 
@@ -93,17 +101,24 @@ function startLine(){
   typing = true;
   charIndex = 0;
   textEl.textContent = '';
-  const line = dialogue[index] || { name: '', text: '' };
+  const line = dialogue[index] || { name: '', text: '', bg: null };
   namebox.textContent = line.name || '';
-  // handle portrait: line.expression may be a key into characterData.list
+
+  // Handle portrait
   if (line.expression && characterData.list && characterData.list[line.expression]) {
     portrait.src = imageBase + characterData.list[line.expression] + '.png';
     portrait.style.display = 'block';
   } else {
-    // hide portrait if not found
     portrait.style.display = 'none';
     portrait.src = '';
   }
+
+  // Handle background
+  if (line.bg && line.bg.file) {
+    bg.src = line.bg.file;
+    bg.style.objectFit = line.bg.scaleMode === 'fill' ? 'cover' : 'contain';
+  }
+
   type();
 }
 
@@ -137,6 +152,12 @@ function nextLine(){
 }
 
 document.addEventListener('click', nextLine);
+
+// Load data initially
+loadData();
+
+// Optional: Auto-update every 60 seconds from GitHub
+setInterval(loadData, 60000);
 </script>
 </body>
 </html>
