@@ -3,22 +3,57 @@
     {
       "name": "katz",
       "text": "hey what up my good man",
-      "expression": "1"
+      "expression": "1",
+      "bg": {
+        "file": "assets/bgs/classroom.png",
+        "width": 2483,
+        "height": 1474,
+        "scaleMode": "fit"
+      }
     },
     {
       "name": "katz",
       "text": "just testing this shit out",
-      "expression": "6"
+      "expression": "6",
+      "bg": {
+        "file": "assets/bgs/classroom.png",
+        "width": 2483,
+        "height": 1474,
+        "scaleMode": "fit"
+      }
+    },
+    {
+      "name": "",
+      "text": "The room is quiet for a moment...",
+      "expression": "",
+      "bg": {
+        "file": "assets/bgs/classroom.png",
+        "width": 2483,
+        "height": 1474,
+        "scaleMode": "fit"
+      }
     },
     {
       "name": "katz",
       "text": "i got it working tho",
-      "expression": "5"
+      "expression": "5",
+      "bg": {
+        "file": "assets/bgs/classroom.png",
+        "width": 2483,
+        "height": 1474,
+        "scaleMode": "fit"
+      }
     },
     {
       "name": "katz",
       "text": "hope this shit becomes better or whatever",
-      "expression": "3"
+      "expression": "3",
+      "bg": {
+        "file": "assets/bgs/schoolyard.png",
+        "width": 2483,
+        "height": 1474,
+        "scaleMode": "fit"
+      }
     }
   ]
 }
